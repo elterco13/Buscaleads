@@ -91,7 +91,7 @@ def generate_search_queries(industry, location, persona, context, notes, provide
             )
             content = response.choices[0].message.content
         elif provider == "Google Gemini":
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(prompt)
             content = response.text
             
