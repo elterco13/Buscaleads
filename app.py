@@ -42,6 +42,24 @@ with st.sidebar:
     industry = st.text_input("Industry / Niche", value="Hotels")
     location = st.text_input("Location", value="Madrid")
     
+    st.markdown("---")
+    
+    # Search Focus - helps LLM choose appropriate platforms
+    search_focus_options = [
+        "Local Businesses (Restaurants, Gyms, Shops, etc.)",
+        "Tourism & Hospitality (Hotels, Tours, Activities)",
+        "B2B Professionals (Executives, Consultants)",
+        "Service Providers (Agencies, Contractors)",
+        "Wholesale & Distribution",
+        "General / Not Sure"
+    ]
+    search_focus = st.selectbox(
+        "Search Focus", 
+        search_focus_options,
+        index=5,
+        help="This helps the AI choose the best search platforms (e.g., Google Maps for local businesses, LinkedIn for professionals)"
+    )
+    
     target_persona_options = [
         "Not Specified", "Decision Maker", "General Manager", "Procurement/Purchasing", 
         "Marketing Director", "Wholesaler", "Distributor", "Custom/Other"
@@ -92,7 +110,7 @@ def configure_llm(provider, key):
             return False
     return False
 
-def generate_search_queries(industry, location, persona, context, notes, expected_results, previous_queries, provider):
+def generate_search_queries(industry, location, persona, context, notes, expected_results, search_focus, previous_queries, provider):
     # Calculate number of queries needed (estimate 3-5 results per query)
     num_queries = max(3, min(10, (expected_results // 4) + 1))
     
@@ -100,19 +118,36 @@ def generate_search_queries(industry, location, persona, context, notes, expecte
     if previous_queries:
         previous_queries_text = f"\n\nIMPORTANT: These queries were ALREADY USED in previous searches. DO NOT repeat them or similar variations:\n{json.dumps(previous_queries, indent=2)}\n\nGenerate COMPLETELY DIFFERENT search strategies, using different platforms, operators, or keyword combinations."
     
+    # Platform recommendations based on search focus
+    platform_guidance = ""
+    if "Local Businesses" in search_focus:
+        platform_guidance = "\n\nPLATFORM FOCUS: Prioritize local business directories, Google Maps, Yelp, local review sites, business associations, and local government directories. AVOID LinkedIn unless explicitly needed."
+    elif "Tourism" in search_focus:
+        platform_guidance = "\n\nPLATFORM FOCUS: Prioritize TripAdvisor, Booking.com, Expedia, GetYourGuide, Viator, tourism boards, and local tourism websites. AVOID LinkedIn unless explicitly needed."
+    elif "B2B Professionals" in search_focus:
+        platform_guidance = "\n\nPLATFORM FOCUS: Prioritize LinkedIn, corporate directories, industry associations, professional networks, and company websites."
+    elif "Service Providers" in search_focus:
+        platform_guidance = "\n\nPLATFORM FOCUS: Prioritize service directories, industry-specific platforms, Google Business, yellow pages, and professional associations."
+    elif "Wholesale" in search_focus:
+        platform_guidance = "\n\nPLATFORM FOCUS: Prioritize wholesale directories, B2B marketplaces, trade associations, and industry-specific platforms."
+    else:
+        platform_guidance = "\n\nPLATFORM FOCUS: Use a diverse mix of platforms - include both professional networks and local business directories."
+    
     prompt = f"""
     Act as a search query expert. I need to find contact information for '{persona}' in the '{industry}' industry in '{location}'.
     Context: {context}
     Constraints: {notes}
     Expected Results: {expected_results}
+    Search Focus: {search_focus}
+    {platform_guidance}
     {previous_queries_text}
     
     Generate {num_queries} distinct, high-quality search queries optimized for DuckDuckGo to find specific leads. 
-    Focus on finding directories, company lists, LinkedIn profiles, and direct contact pages. 
+    Focus on finding directories, company lists, contact pages, and profiles that match the search focus.
     Vary your strategies: use different search operators (site:, intitle:, inurl:), different platforms, and different keyword combinations.
     Do NOT include specific company names unless they are examples. 
     Format the output as a valid JSON list of strings.
-    Example: ["site:linkedin.com {persona} {industry} {location}", "{industry} directory {location} contact", "intitle:contact {industry} {location}"]
+    Example: ["site:tripadvisor.com {industry} {location}", "{industry} directory {location} contact", "inurl:contact {industry} {location}"]
     """
     
     try:
@@ -245,7 +280,7 @@ if search_btn or research_btn:
     with st.spinner("Asking LLM for best search strategies..."):
         queries = generate_search_queries(
             industry, location, target_persona, user_context, 
-            additional_notes, expected_results, 
+            additional_notes, expected_results, search_focus,
             st.session_state.previous_queries,  # Pass previous queries
             llm_provider
         )
