@@ -227,7 +227,8 @@ def extract_and_filter(raw_results, context, notes, industry, provider):
 st.title("🚀 Real-Time B2B Lead Scraper & Analyzer")
 st.markdown(f"**Targeting:** `{target_persona}` in `{industry}` ({location})")
 
-if search_btn:
+# Main execution - triggered by either button
+if search_btn or research_btn:
     if not api_key:
         st.error("Please provide an API Key.")
         st.stop()
@@ -235,11 +236,24 @@ if search_btn:
     if not configure_llm(llm_provider, api_key):
         st.error("Failed to configure LLM provider.")
         st.stop()
+    
+    # Show which mode we're in
+    if research_btn:
+        st.info("🔄 Re-searching with different criteria to find new leads...")
         
     st.status("🤖 Formulating Search Queries...", expanded=True)
     with st.spinner("Asking LLM for best search strategies..."):
-        queries = generate_search_queries(industry, location, target_persona, user_context, additional_notes, expected_results, llm_provider)
+        queries = generate_search_queries(
+            industry, location, target_persona, user_context, 
+            additional_notes, expected_results, 
+            st.session_state.previous_queries,  # Pass previous queries
+            llm_provider
+        )
         st.write("Queries Generated:", queries)
+        
+        # Save queries to history
+        st.session_state.previous_queries.extend(queries)
+        st.session_state.search_count += 1
         
     st.status("🌐 Searching the Web (DuckDuckGo)...", expanded=True)
     with st.spinner("Scraping real-time data..."):
