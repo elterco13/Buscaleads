@@ -68,7 +68,7 @@ def configure_llm(provider, key):
         try:
             # Debug: List available models
             models = [m.name for m in genai.list_models()]
-            # st.sidebar.write("Available Models:", models) # Uncomment to debug
+            st.sidebar.write("Available Models:", models) # Debugging enabled
             return True
         except Exception as e:
             st.error(f"Error configuring Gemini: {e}")
