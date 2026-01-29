@@ -116,17 +116,26 @@ def generate_search_queries(industry, location, persona, context, notes, provide
 
 def perform_search(queries):
     results = []
-    with DDGS() as ddgs:
-        for query in queries:
-            try:
-                # Fetching generic results (titles, snippets, urls)
-                search_results = list(ddgs.text(query, max_results=5))
-                for res in search_results:
-                    res['query_used'] = query
-                    results.append(res)
-                time.sleep(1) # Respect rate limits
-            except Exception as e:
-                st.warning(f"Error searching for '{query}': {e}")
+    for query in queries:
+        try:
+            st.info(f"🔍 Searching: '{query}'")
+            # Fetching generic results (titles, snippets, urls)
+            ddgs = DDGS()
+            search_results = ddgs.text(query, max_results=10, region='wt-wt')
+            
+            count = 0
+            for res in search_results:
+                res['query_used'] = query
+                results.append(res)
+                count += 1
+            
+            st.success(f"✓ Found {count} results for this query")
+            time.sleep(2)  # Increased delay to avoid rate limiting
+            
+        except Exception as e:
+            st.warning(f"⚠️ Error searching for '{query}': {str(e)}")
+            time.sleep(3)  # Longer delay after error
+    
     return results
 
 def extract_and_filter(raw_results, context, notes, provider):
