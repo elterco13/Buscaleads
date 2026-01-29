@@ -25,6 +25,12 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Initialize session state for search history
+if 'previous_queries' not in st.session_state:
+    st.session_state.previous_queries = []
+if 'search_count' not in st.session_state:
+    st.session_state.search_count = 0
+
 # --- Sidebar Inputs ---
 with st.sidebar:
     st.title("🔧 Configuration")
@@ -57,6 +63,14 @@ with st.sidebar:
     save_path = st.text_input("Local Save Path", value="./leads_output/")
     
     search_btn = st.button("Search & Scrape", type="primary")
+    
+    # Show re-search button only after first search
+    if st.session_state.search_count > 0:
+        st.markdown("---")
+        st.info(f"Previous searches: {st.session_state.search_count}")
+        research_btn = st.button("🔄 Search Again (Different Criteria)", type="secondary")
+    else:
+        research_btn = False
 
 # --- Backend Logic ---
 
@@ -78,15 +92,20 @@ def configure_llm(provider, key):
             return False
     return False
 
-def generate_search_queries(industry, location, persona, context, notes, expected_results, provider):
+def generate_search_queries(industry, location, persona, context, notes, expected_results, previous_queries, provider):
     # Calculate number of queries needed (estimate 3-5 results per query)
     num_queries = max(3, min(10, (expected_results // 4) + 1))
+    
+    previous_queries_text = ""
+    if previous_queries:
+        previous_queries_text = f"\n\nIMPORTANT: These queries were ALREADY USED in previous searches. DO NOT repeat them or similar variations:\n{json.dumps(previous_queries, indent=2)}\n\nGenerate COMPLETELY DIFFERENT search strategies, using different platforms, operators, or keyword combinations."
     
     prompt = f"""
     Act as a search query expert. I need to find contact information for '{persona}' in the '{industry}' industry in '{location}'.
     Context: {context}
     Constraints: {notes}
     Expected Results: {expected_results}
+    {previous_queries_text}
     
     Generate {num_queries} distinct, high-quality search queries optimized for DuckDuckGo to find specific leads. 
     Focus on finding directories, company lists, LinkedIn profiles, and direct contact pages. 
