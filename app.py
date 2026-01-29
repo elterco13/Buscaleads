@@ -37,10 +37,10 @@ with st.sidebar:
     location = st.text_input("Location", value="Madrid")
     
     target_persona_options = [
-        "Decision Maker", "General Manager", "Procurement/Purchasing", 
+        "Not Specified", "Decision Maker", "General Manager", "Procurement/Purchasing", 
         "Marketing Director", "Wholesaler", "Distributor", "Custom/Other"
     ]
-    target_persona = st.selectbox("Target Persona", target_persona_options)
+    target_persona = st.selectbox("Target Persona", target_persona_options, index=0)
     
     if target_persona == "Custom/Other":
         target_persona = st.text_input("Specify Target Persona", value="CEO")
@@ -50,6 +50,9 @@ with st.sidebar:
     
     additional_notes = st.text_area("Additional Instructions / Notes", 
                                   help="Specific Constraints (e.g., 'Ignore chains, only independent businesses')")
+    
+    expected_results = st.number_input("Expected Results Count", min_value=5, max_value=100, value=20, step=5,
+                                       help="Number of qualified leads you want to find")
     
     save_path = st.text_input("Local Save Path", value="./leads_output/")
     
@@ -75,17 +78,22 @@ def configure_llm(provider, key):
             return False
     return False
 
-def generate_search_queries(industry, location, persona, context, notes, provider):
+def generate_search_queries(industry, location, persona, context, notes, expected_results, provider):
+    # Calculate number of queries needed (estimate 3-5 results per query)
+    num_queries = max(3, min(10, (expected_results // 4) + 1))
+    
     prompt = f"""
     Act as a search query expert. I need to find contact information for '{persona}' in the '{industry}' industry in '{location}'.
     Context: {context}
     Constraints: {notes}
+    Expected Results: {expected_results}
     
-    Generate 3 distinct, high-quality search queries optimized for DuckDuckGo to find specific leads. 
-    Focus on finding directories, company lists, or direct contact pages. 
+    Generate {num_queries} distinct, high-quality search queries optimized for DuckDuckGo to find specific leads. 
+    Focus on finding directories, company lists, LinkedIn profiles, and direct contact pages. 
+    Vary your strategies: use different search operators (site:, intitle:, inurl:), different platforms, and different keyword combinations.
     Do NOT include specific company names unless they are examples. 
     Format the output as a valid JSON list of strings.
-    Example: ["site:linkedin.com {persona} {industry} {location}", "{industry} directory {location} contact"]
+    Example: ["site:linkedin.com {persona} {industry} {location}", "{industry} directory {location} contact", "intitle:contact {industry} {location}"]
     """
     
     try:
@@ -138,32 +146,38 @@ def perform_search(queries):
     
     return results
 
-def extract_and_filter(raw_results, context, notes, provider):
+def extract_and_filter(raw_results, context, notes, industry, provider):
     if not raw_results:
         return pd.DataFrame()
         
-    results_json = json.dumps(raw_results[:15]) # Limit payload size
+    results_json = json.dumps(raw_results[:20]) # Increased payload
     
     prompt = f"""
     I have a list of web search results. I need you to extract valid B2B leads and filter out irrelevant ones.
     
     User Context: {context}
     Special Notes: {notes}
+    Industry: {industry}
     
     Raw Search Data:
     {results_json}
     
     Task:
-    1. Analyze each search result snippet/title.
-    2. Extract: Entity Name, Role/Contact (if found), and verify if it matches the criteria.
-    3. Return a JSON list of objects with these keys:
-       - "Entity Name": Name of the business or person.
-       - "Role/Contact": Any contact info or role mentioned (e.g., "Manager", "email@example.com").
-       - "Source URL": The URL from the result.
-       - "Context/Notes": Why is this a good lead based on the user context?
-       - "Verified Information": The specific snippet text that validates this lead.
+    1. Analyze each search result snippet/title/URL.
+    2. Extract structured data for each valid lead.
+    3. Return a JSON list of objects with EXACTLY these keys:
+       - "Organization": Name of the company/business
+       - "Contact Name": Full name of the person (if found, otherwise leave empty)
+       - "Job Title": Their role/position (if found, otherwise leave empty)
+       - "Email": Email address (if found, otherwise leave empty)
+       - "Why Good Fit": Brief explanation of why this is a qualified lead based on the user context
+       - "Category": Type of business (e.g., "Restaurant", "Hotel", "Distributor")
+       - "Website": The URL from the search result
     
-    Strictly return ONLY valid JSON.
+    IMPORTANT: 
+    - Be conservative - only include results that are clearly relevant businesses
+    - If a field is not available, use an empty string ""
+    - Strictly return ONLY valid JSON, no additional text
     """
     
     try:
@@ -205,7 +219,7 @@ if search_btn:
         
     st.status("🤖 Formulating Search Queries...", expanded=True)
     with st.spinner("Asking LLM for best search strategies..."):
-        queries = generate_search_queries(industry, location, target_persona, user_context, additional_notes, llm_provider)
+        queries = generate_search_queries(industry, location, target_persona, user_context, additional_notes, expected_results, llm_provider)
         st.write("Queries Generated:", queries)
         
     st.status("🌐 Searching the Web (DuckDuckGo)...", expanded=True)
@@ -215,7 +229,7 @@ if search_btn:
         
     st.status("🧠 Analyzing & Filtering Leads...", expanded=True)
     with st.spinner("LLM is processing results..."):
-        df = extract_and_filter(raw_results, user_context, additional_notes, llm_provider)
+        df = extract_and_filter(raw_results, user_context, additional_notes, industry, llm_provider)
         
     if not df.empty:
         st.success(f"Successfully extracted {len(df)} qualified leads!")
@@ -224,8 +238,10 @@ if search_btn:
         st.dataframe(
             df,
             column_config={
-                "Source URL": st.column_config.LinkColumn("Source URL"),
-            }
+                "Website": st.column_config.LinkColumn("Website"),
+                "Email": st.column_config.TextColumn("Email"),
+            },
+            use_container_width=True
         )
         
         # Auto-Save
