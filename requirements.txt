@@ -1,0 +1,6 @@
+streamlit
+pandas
+duckduckgo-search
+openai
+google-generativeai
+openpyxl
