@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import openai
 import google.generativeai as genai
 import os
