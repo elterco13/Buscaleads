@@ -2,5 +2,5 @@ streamlit
 pandas
 duckduckgo-search
 openai
-google-generativeai
+google-generativeai>=0.7.2
 openpyxl

@@ -65,7 +65,14 @@ def configure_llm(provider, key):
         return True
     elif provider == "Google Gemini":
         genai.configure(api_key=key)
-        return True
+        try:
+            # Debug: List available models
+            models = [m.name for m in genai.list_models()]
+            # st.sidebar.write("Available Models:", models) # Uncomment to debug
+            return True
+        except Exception as e:
+            st.error(f"Error configuring Gemini: {e}")
+            return False
     return False
 
 def generate_search_queries(industry, location, persona, context, notes, provider):
