@@ -283,9 +283,10 @@ def perform_search(queries):
             time.sleep(2)  # Increased delay to avoid rate limiting
             
         except Exception as e:
-            st.warning(f"⚠️ Error searching for '{query}': {str(e)}")
+            st.error(f"⚠️ Query failed: {str(e)[:50]}...")
             time.sleep(3)  # Longer delay after error
     
+    st.info(f"🌐 **Total search results collected:** {len(results)} URLs")
     return results
 
 def scrape_websites(search_results, max_urls=15):
@@ -306,36 +307,41 @@ def scrape_websites(search_results, max_urls=15):
             if len(urls_to_scrape) >= max_urls:
                 break
     
-    st.info(f"🌐 Found {len(urls_to_scrape)} candidate websites. Starting deep scraping...")
+    st.info(f"🕷️ Starting deep scraping of {len(urls_to_scrape)} websites...")
     
     progress_bar = st.progress(0)
-    for idx, item in enumerate(urls_to_scrape):
-        url = item['url']
-        domain = urlparse(url).netloc
-        
-        st.caption(f"🔍 Scraping {idx+1}/{len(urls_to_scrape)}: {domain}")
-        
-        scraped = scrape_url_content(url)
-        
-        if scraped['success']:
-            if scraped['emails'] or scraped['phones']:
-                scraped_data.append({
-                    'url': url,
-                    'title': item['title'],
-                    'snippet': item['snippet'],
-                    'emails': scraped['emails'],
-                    'phones': scraped['phones']
-                })
-                st.success(f"✓ {domain}: Found {len(scraped['emails'])} emails, {len(scraped['phones'])} phones")
+    status_text = st.empty()
+    
+    with st.expander("View Scraping Details (Live Log)", expanded=False):
+        for idx, item in enumerate(urls_to_scrape):
+            url = item['url']
+            domain = urlparse(url).netloc
+            
+            status_text.markdown(f"**Scanning {idx+1}/{len(urls_to_scrape)}:** `{domain}`")
+            
+            scraped = scrape_url_content(url)
+            
+            if scraped['success']:
+                if scraped['emails'] or scraped['phones']:
+                    scraped_data.append({
+                        'url': url,
+                        'title': item['title'],
+                        'snippet': item['snippet'],
+                        'emails': scraped['emails'],
+                        'phones': scraped['phones']
+                    })
+                    st.write(f"✅ **{domain}**: Found {len(scraped['emails'])} emails, {len(scraped['phones'])} phones")
+                else:
+                    st.write(f"⚠️ **{domain}**: No contact info found")
             else:
-                st.caption(f"⚠️ {domain}: No contact info found")
-        else:
-            st.caption(f"❌ {domain}: Failed ({scraped.get('error', 'unknown')})")
-        
-        progress_bar.progress((idx + 1) / len(urls_to_scrape))
-        time.sleep(1)  # Delay between requests
+                st.write(f"❌ **{domain}**: Failed ({scraped.get('error', 'unknown')})")
+            
+            progress_bar.progress((idx + 1) / len(urls_to_scrape))
+            time.sleep(1)  # Delay between requests
     
     progress_bar.empty()
+    status_text.empty()
+    return scraped_data
     return scraped_data
 
 def extract_and_filter(scraped_data, context, notes, industry, provider):
@@ -487,7 +493,11 @@ if search_btn or research_btn:
             st.session_state.previous_queries,  # Pass previous queries
             llm_provider
         )
-        st.write("Queries Generated:", queries)
+        
+        # Display queries in a clean format
+        with st.expander(f"✅ Generated {len(queries)} Strategic Search Queries", expanded=False):
+            for idx, q in enumerate(queries, 1):
+                st.markdown(f"**{idx}.** `{q}`")
         
         # Save queries to history
         st.session_state.previous_queries.extend(queries)
