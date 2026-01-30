@@ -198,35 +198,58 @@ def generate_search_queries(industry, location, persona, context, notes, expecte
     else:
         platform_guidance = "\n\nPLATFORM FOCUS: Use a diverse mix of platforms - include both professional networks and local business directories."
     
-    prompt = f"""
-    Act as a search query expert. I need to find contact information for '{persona}' in the '{industry}' industry in '{location}'.
-    Context: {context}
-    Constraints: {notes}
-    Expected Results: {expected_results}
-    Search Focus: {search_focus}
-    {platform_guidance}
-    {previous_queries_text}
+    # System prompt for Phase 1: Query Orchestration
+    system_prompt = """You are a Senior Commercial Intelligence Analyst specialized in B2B market research and data extraction.
+Your role is to generate strategic search queries that will discover high-quality business leads."""
     
-    Generate {num_queries} distinct, high-quality search queries optimized for DuckDuckGo to find specific leads. 
-    Focus on finding directories, company lists, contact pages, and profiles that match the search focus.
-    Vary your strategies: use different search operators (site:, intitle:, inurl:), different platforms, and different keyword combinations.
-    Do NOT include specific company names unless they are examples. 
-    Format the output as a valid JSON list of strings.
-    Example: ["site:tripadvisor.com {industry} {location}", "{industry} directory {location} contact", "inurl:contact {industry} {location}"]
-    """
+    user_prompt = f"""PHASE 1: QUERY ORCHESTRATION
+
+Generate {num_queries} strategic search queries to find leads with the following parameters:
+- Industry/Niche: {industry}
+- Location: {location}
+- Target Persona: {persona}
+- User Context: {context}
+- Special Notes: {notes}
+- Expected Results: {expected_results}
+- Search Focus: {search_focus}
+{platform_guidance}
+{previous_queries_text}
+
+SEARCH MATRIX STRATEGY:
+Your queries should include a mix of:
+1. Direct Search: [{industry}] [{location}]
+2. Authority Search: site:.org OR site:.gov "{industry}" {location} association OR chamber
+3. Persona Search: site:linkedin.com "{persona}" {industry} {location} (only if B2B focus)
+4. Deep Web Footprints: "{industry}" {location} "contact us" OR "about" OR "team"
+
+CRITICAL RULES:
+- Generate DIVERSE queries using different operators (site:, intitle:, inurl:)
+- Vary platforms based on Search Focus
+- Do NOT repeat previous queries or similar variations
+- Output ONLY a valid JSON array of strings
+
+Example output format:
+["site:tripadvisor.com {industry} {location}", "{industry} directory {location}", "intitle:contact {industry} {location}"]
+"""
     
     try:
         if provider == "OpenAI":
             client = openai.Client(api_key=api_key)
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
                 temperature=0.7
             )
             content = response.choices[0].message.content
         elif provider == "Google Gemini":
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(prompt)
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',
+                system_instruction=system_prompt
+            )
+            response = model.generate_content(user_prompt)
             content = response.text
             
         # Extract JSON list from text
@@ -336,33 +359,69 @@ def extract_and_filter(scraped_data, context, notes, industry, provider):
     
     results_json = json.dumps(data_summary, indent=2)
     
-    prompt = f"""
-    I have scraped real contact data from websites. Your job is to organize this into a structured lead list.
+    # System prompt for Phases 2-4
+    system_prompt = """You are a Senior Commercial Intelligence Analyst specialized in B2B market research and lead qualification.
+
+Your mission is to transform raw scraped web data into high-quality, verified, strategically-scored business leads.
+
+CORE PRINCIPLES:
+1. ANTI-HALLUCINATION: Never invent data. If information is not present, leave field empty.
+2. EVIDENCE-BASED: All data must be traceable to the source snippet.
+3. STRATEGIC FILTERING: Prioritize leads that match user context and notes.
+4. QUALITY OVER QUANTITY: Better 5 perfect leads than 20 mediocre ones."""
     
-    User Context: {context}
-    Special Notes: {notes}
-    Industry: {industry}
-    
-    Scraped Data (with REAL emails and phone numbers):
-    {results_json}
-    
-    Task:
-    1. For each entry, extract and organize the data.
-    2. Return a JSON list of objects with EXACTLY these keys:
-       - "Organization": Extract company/business name from title or URL
-       - "Contact Name": Leave empty (we don't have individual names yet)
-       - "Job Title": Leave empty
-       - "Email": Use the FIRST email from the scraped emails list (or empty if none)
-       - "Phone": Use the FIRST phone from the scraped phones list (or empty if none) 
-       - "Why Good Fit": Brief explanation based on context and industry match
-       - "Category": Type of business based on title/URL
-       - "Website": The URL
-    
-    IMPORTANT: 
-    - Use the ACTUAL scraped emails and phones - don't make them up!
-    - Only include businesses that match the industry/context
-    - Strictly return ONLY valid JSON, no additional text
-    """
+    user_prompt = f"""PHASES 2-4: EXTRACTION, SCORING & VERIFICATION
+
+User Parameters:
+- Industry: {industry}
+- User Context: {context}
+- Special Notes: {notes}
+
+Scraped Website Data (with REAL contact information):
+{results_json}
+
+YOUR TASKS:
+
+PHASE 2: DATA HARVESTING
+For each website, extract:
+- Organization Name: Official business name
+- Contact Info: Use ACTUAL scraped emails/phones (DO NOT INVENT!)
+- Category: Business type (Restaurant, Hotel, Tour Operator, etc.)
+
+PHASE 3: RELEVANCE SCORING (0-100 points)
+Evaluate each lead:
+- Niche Fit (+40 pts): Exactly matches industry/search intent?
+- Persona Match (+30 pts): Is target decision-maker identifiable?
+- Notes Compliance (+30 pts): Meets special requirements?
+- PENALTY (-50 pts): Chain/franchise when independent was requested
+
+PHASE 4: ANTI-HALLUCINATION VERIFICATION
+CRITICAL RULES:
+- If email not in scraped data → leave "Email" empty or "Not found"
+- If phone not in scraped data → leave "Phone" empty or "Not found"
+- Cite evidence from snippet to validate the lead exists
+- Verify URL domain matches organization name
+
+OUTPUT FORMAT (JSON only):
+Return a JSON array of objects with these EXACT keys:
+- "Organization": Company/business name
+- "Contact Name": Person name (leave empty if not available)
+- "Job Title": Role/position (leave empty if not available)  
+- "Email": FIRST email from scraped data (or empty string)
+- "Phone": FIRST phone from scraped data (or empty string)
+- "Why Good Fit": Brief justification based on context ({context})
+- "Category": Business type
+- "Website": Source URL
+- "Relevance Score": Numeric score 0-100
+- "Evidence": Text snippet validating this lead
+
+PRIORITY RULES:
+- If "Special Notes" provided, they override all other logic
+- If User Context = "Sales/Vendedor", prioritize leads with direct contact info
+- If User Context = "Analyst/Analista", prioritize accuracy and category precision
+- Only include leads with score ≥ 60
+
+OUTPUT: Return ONLY valid JSON, no markdown, no explanations."""
     
     try:
         content = ""
@@ -370,19 +429,33 @@ def extract_and_filter(scraped_data, context, notes, industry, provider):
             client = openai.Client(api_key=api_key)
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3  # Lower temperature for more factual output
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.2  # Lower temperature for factual, non-creative output
             )
             content = response.choices[0].message.content
         elif provider == "Google Gemini":
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(prompt)
+            model = genai.GenerativeModel(
+                'gemini-2.5-flash',
+                system_instruction=system_prompt
+            )
+            response = model.generate_content(user_prompt)
             content = response.text
             
         # Clean and parse JSON
         content = content.replace("```json", "").replace("```", "").strip()
         data = json.loads(content)
-        return pd.DataFrame(data)
+        
+        # Keep only essential columns for display (hide scoring internals)
+        df = pd.DataFrame(data)
+        if 'Relevance Score' in df.columns and 'Evidence' in df.columns:
+            # Optionally drop these for cleaner UI, or keep for transparency
+            # df = df.drop(columns=['Relevance Score', 'Evidence'])
+            pass
+        
+        return df
         
     except Exception as e:
         st.error(f"Error extracting data: {e}")
