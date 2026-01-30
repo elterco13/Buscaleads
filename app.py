@@ -13,104 +13,107 @@ from urllib.parse import urljoin, urlparse
 
 # Page Config
 st.set_page_config(
-    page_title="Buscaleads 3000",
-    page_icon="👾",
+    page_title="Stratton Oakmont Leads",
+    page_icon="💸",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- RETRO/NEON THEME CSS ---
+# --- WOLF OF WALL STREET THEME CSS ---
 st.markdown("""
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
 <style>
-    /* MAIN BACKGROUND */
+    /* MAIN BACKGROUND - Money & Success */
     .stApp {
-        background-color: #1a0b2e;
-        background-image: linear-gradient(180deg, #1a0b2e 0%, #2d1b4e 100%);
-        color: #e0e0e0;
+        background-color: #ffffff;
+        background-image: linear-gradient(315deg, #ffffff 0%, #d7e1ec 74%);
+        color: #0A192F;
     }
     
-    /* FONTS */
+    /* FONTS - Authority & Power */
     h1, h2, h3 {
-        font-family: 'Press Start 2P', cursive !important;
+        font-family: 'Cinzel', serif !important;
+        color: #0A192F !important;
+        font-weight: 700 !important;
         text-transform: uppercase;
-        letter-spacing: 2px;
+        letter-spacing: 1px;
     }
     
     p, div, label, input, textarea, .stMarkdown {
-        font-family: 'VT323', monospace !important;
-        font-size: 1.2rem !important;
+        font-family: 'Lato', sans-serif !important;
+        color: #1e293b !important;
     }
     
-    /* NEON TITLES */
+    /* MONEY GREEN TITLES */
     h1 {
-        background: linear-gradient(to right, #00ffff, #ff0099);
+        background: linear-gradient(to right, #0A192F, #118C4F);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 2px 2px 0px #000000;
-        padding-bottom: 20px;
+        border-bottom: 3px solid #ffbf00; /* Gold underline */
+        padding-bottom: 10px;
         text-align: center;
     }
     
-    /* CONTAINERS & CARDS */
+    /* CONTAINERS & CARDS - Corporate Sleek */
     .stExpander, div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div {
-        background-color: #2d1b4e;
-        border: 2px solid #ff0099 !important;
-        box-shadow: 4px 4px 0px #00ffff;
-        border-radius: 0px !important;
-        padding: 10px;
-        margin-bottom: 10px;
+        background-color: #ffffff;
+        border: 1px solid #d1d5db !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        border-radius: 4px !important;
+        padding: 15px;
+    }
+    
+    /* SIDEBAR - The Boardroom */
+    section[data-testid="stSidebar"] {
+        background-color: #0A192F; /* Deep Navy */
+        border-right: 2px solid #ffbf00; /* Gold Border */
+    }
+    
+    section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] label {
+        color: #ffbf00 !important; /* Gold text in sidebar */
+    }
+    
+    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span {
+        color: #e2e8f0 !important;
+    }
+    
+    /* BUTTONS - "SELL ME THIS PEN" */
+    .stButton > button {
+        background: linear-gradient(to bottom, #118C4F 5%, #0e7040 100%);
+        background-color: #118C4F;
+        border: 1px solid #0e7040;
+        color: #ffffff !important;
+        font-family: 'Cinzel', serif !important;
+        font-weight: bold;
+        font-size: 16px !important;
+        padding: 10px 24px;
+        text-shadow: 0px 1px 0px #0e7040;
+        box-shadow: 0px 10px 14px -7px #0e7040;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton > button:hover {
+        background: linear-gradient(to bottom, #0e7040 5%, #118C4F 100%);
+        background-color: #0e7040;
+        transform: scale(1.02);
     }
     
     /* INPUT FIELDS */
     .stTextInput > div > div > input, .stTextArea > div > div > textarea, .stSelectbox > div > div > div {
-        background-color: #000000 !important;
-        color: #00ffff !important;
-        border: 2px solid #ff0099 !important;
-        font-family: 'VT323', monospace !important;
-        font-size: 1.2rem !important;
-    }
-    
-    /* BUTTONS */
-    .stButton > button {
-        background-color: #000000 !important;
-        color: #ff0099 !important;
-        border: 2px solid #ff0099 !important;
-        font-family: 'Press Start 2P', cursive !important;
-        font-size: 0.8rem !important;
-        text-transform: uppercase;
-        box-shadow: 4px 4px 0px #00ffff;
-        transition: all 0.2s;
-    }
-    
-    .stButton > button:hover {
-        transform: translate(2px, 2px);
-        box-shadow: 2px 2px 0px #00ffff;
-        color: #00ffff !important;
-        border-color: #00ffff !important;
-    }
-    
-    /* SIDEBAR */
-    section[data-testid="stSidebar"] {
-        background-color: #110022;
-        border-right: 3px solid #ff0099;
-    }
-    
-    /* ALERTS & STATUS */
-    .stAlert {
-        background-color: #000000 !important;
-        border: 2px solid #00ffff !important;
-        color: #00ffff !important;
-    }
-    
-    .stProgress > div > div > div > div {
-        background-color: #ff0099;
+        background-color: #f8fafc !important;
+        color: #0A192F !important;
+        border: 1px solid #cbd5e1 !important;
+        font-family: 'Lato', sans-serif !important;
     }
     
     /* DATAFRAME */
     div[data-testid="stDataFrame"] {
-        border: 2px solid #ff0099;
-        box-shadow: 5px 5px 0px #000;
+        border: 1px solid #118C4F;
+    }
+    
+    /* ALERTS */
+    .stAlert {
+        border-left: 5px solid #ffbf00 !important; /* Gold stripe */
     }
 </style>
 """, unsafe_allow_html=True)
