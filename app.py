@@ -12,25 +12,108 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
 # Page Config
-st.set_page_config(page_title="Real-Time B2B Lead Scraper", page_icon="🔍", layout="wide")
+st.set_page_config(
+    page_title="Buscaleads 3000",
+    page_icon="👾",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Custom CSS for aesthetics
+# --- RETRO/NEON THEME CSS ---
 st.markdown("""
-    <style>
-    .stButton>button {
-        width: 100%;
-        background-color: #FF4B4B;
-        color: white;
-    }
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+    /* MAIN BACKGROUND */
     .stApp {
-        background-color: #f0f2f6;
+        background-color: #1a0b2e;
+        background-image: linear-gradient(180deg, #1a0b2e 0%, #2d1b4e 100%);
+        color: #e0e0e0;
     }
-    /* Force black text for better contrast */
-    .stMarkdown, .stText, p, span, div {
-        color: #000000 !important;
+    
+    /* FONTS */
+    h1, h2, h3 {
+        font-family: 'Press Start 2P', cursive !important;
+        text-transform: uppercase;
+        letter-spacing: 2px;
     }
-    </style>
-    """, unsafe_allow_html=True)
+    
+    p, div, label, input, textarea, .stMarkdown {
+        font-family: 'VT323', monospace !important;
+        font-size: 1.2rem !important;
+    }
+    
+    /* NEON TITLES */
+    h1 {
+        background: linear-gradient(to right, #00ffff, #ff0099);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 2px 2px 0px #000000;
+        padding-bottom: 20px;
+        text-align: center;
+    }
+    
+    /* CONTAINERS & CARDS */
+    .stExpander, div[data-testid="stForm"], div[data-testid="stVerticalBlock"] > div {
+        background-color: #2d1b4e;
+        border: 2px solid #ff0099 !important;
+        box-shadow: 4px 4px 0px #00ffff;
+        border-radius: 0px !important;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+    
+    /* INPUT FIELDS */
+    .stTextInput > div > div > input, .stTextArea > div > div > textarea, .stSelectbox > div > div > div {
+        background-color: #000000 !important;
+        color: #00ffff !important;
+        border: 2px solid #ff0099 !important;
+        font-family: 'VT323', monospace !important;
+        font-size: 1.2rem !important;
+    }
+    
+    /* BUTTONS */
+    .stButton > button {
+        background-color: #000000 !important;
+        color: #ff0099 !important;
+        border: 2px solid #ff0099 !important;
+        font-family: 'Press Start 2P', cursive !important;
+        font-size: 0.8rem !important;
+        text-transform: uppercase;
+        box-shadow: 4px 4px 0px #00ffff;
+        transition: all 0.2s;
+    }
+    
+    .stButton > button:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px #00ffff;
+        color: #00ffff !important;
+        border-color: #00ffff !important;
+    }
+    
+    /* SIDEBAR */
+    section[data-testid="stSidebar"] {
+        background-color: #110022;
+        border-right: 3px solid #ff0099;
+    }
+    
+    /* ALERTS & STATUS */
+    .stAlert {
+        background-color: #000000 !important;
+        border: 2px solid #00ffff !important;
+        color: #00ffff !important;
+    }
+    
+    .stProgress > div > div > div > div {
+        background-color: #ff0099;
+    }
+    
+    /* DATAFRAME */
+    div[data-testid="stDataFrame"] {
+        border: 2px solid #ff0099;
+        box-shadow: 5px 5px 0px #000;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize session state for search history
 if 'previous_queries' not in st.session_state:
