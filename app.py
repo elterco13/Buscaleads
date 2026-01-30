@@ -7,6 +7,9 @@ import os
 import time
 import json
 import re
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 
 # Page Config
 st.set_page_config(page_title="Real-Time B2B Lead Scraper", page_icon="🔍", layout="wide")
@@ -91,6 +94,68 @@ with st.sidebar:
         research_btn = False
 
 # --- Backend Logic ---
+
+def scrape_url_content(url, timeout=8):
+    """
+    Scrapes a single URL and extracts contact information.
+    Returns dict with emails, phones, and other contact data.
+    """
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'lxml')
+        
+        # Extract all text content
+        text_content = soup.get_text(separator=' ', strip=True)
+        
+        # Find emails using regex
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = list(set(re.findall(email_pattern, text_content)))
+        
+        # Find phone numbers (international and Spanish formats)
+        phone_pattern = r'(?:\+34|0034)?\s*[6-9]\d{2}\s*\d{2}\s*\d{2}\s*\d{2}|(?:\+\d{1,3})?\s*\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}'
+        phones = list(set(re.findall(phone_pattern, text_content)))
+        # Clean phone numbers
+        phones = [re.sub(r'\s+', ' ', p.strip()) for p in phones if len(p.replace(' ', '')) >= 9]
+        
+        # Try to find contact page link
+        contact_links = []
+        for link in soup.find_all('a', href=True):
+            href = link['href'].lower()
+            if any(word in href for word in ['contact', 'contacto', 'about', 'acerca']):
+                full_url = urljoin(url, link['href'])
+                contact_links.append(full_url)
+        
+        # If no contact info found on main page but contact link exists, try scraping that
+        if (not emails and not phones) and contact_links:
+            try:
+                contact_url = contact_links[0]
+                contact_response = requests.get(contact_url, headers=headers, timeout=5)
+                contact_soup = BeautifulSoup(contact_response.text, 'lxml')
+                contact_text = contact_soup.get_text(separator=' ', strip=True)
+                
+                emails = list(set(re.findall(email_pattern, contact_text)))
+                phones = list(set(re.findall(phone_pattern, contact_text)))
+                phones = [re.sub(r'\s+', ' ', p.strip()) for p in phones if len(p.replace(' ', '')) >= 9]
+            except:
+                pass
+        
+        return {
+            'emails': emails[:3],  # Limit to 3 emails
+            'phones': phones[:3],  # Limit to 3 phones
+            'success': True
+        }
+        
+    except requests.Timeout:
+        return {'emails': [], 'phones': [], 'success': False, 'error': 'timeout'}
+    except requests.RequestException as e:
+        return {'emails': [], 'phones': [], 'success': False, 'error': str(e)[:50]}
+    except Exception as e:
+        return {'emails': [], 'phones': [], 'success': False, 'error': str(e)[:50]}
 
 def configure_llm(provider, key):
     if not key:
@@ -200,37 +265,102 @@ def perform_search(queries):
     
     return results
 
-def extract_and_filter(raw_results, context, notes, industry, provider):
-    if not raw_results:
+def scrape_websites(search_results, max_urls=15):
+    """
+    Takes search results and scrapes actual website content.
+    Returns enriched results with contact information.
+    """
+    scraped_data = []
+    urls_to_scrape = []
+    
+    # Collect unique URLs
+    seen_urls = set()
+    for result in search_results:
+        url = result.get('href') or result.get('link')
+        if url and url not in seen_urls:
+            urls_to_scrape.append({'url': url, 'title': result.get('title', ''), 'snippet': result.get('body', '')})
+            seen_urls.add(url)
+            if len(urls_to_scrape) >= max_urls:
+                break
+    
+    st.info(f"🌐 Found {len(urls_to_scrape)} candidate websites. Starting deep scraping...")
+    
+    progress_bar = st.progress(0)
+    for idx, item in enumerate(urls_to_scrape):
+        url = item['url']
+        domain = urlparse(url).netloc
+        
+        st.caption(f"🔍 Scraping {idx+1}/{len(urls_to_scrape)}: {domain}")
+        
+        scraped = scrape_url_content(url)
+        
+        if scraped['success']:
+            if scraped['emails'] or scraped['phones']:
+                scraped_data.append({
+                    'url': url,
+                    'title': item['title'],
+                    'snippet': item['snippet'],
+                    'emails': scraped['emails'],
+                    'phones': scraped['phones']
+                })
+                st.success(f"✓ {domain}: Found {len(scraped['emails'])} emails, {len(scraped['phones'])} phones")
+            else:
+                st.caption(f"⚠️ {domain}: No contact info found")
+        else:
+            st.caption(f"❌ {domain}: Failed ({scraped.get('error', 'unknown')})")
+        
+        progress_bar.progress((idx + 1) / len(urls_to_scrape))
+        time.sleep(1)  # Delay between requests
+    
+    progress_bar.empty()
+    return scraped_data
+
+def extract_and_filter(scraped_data, context, notes, industry, provider):
+    """
+    Uses LLM to organize and filter scraped data into structured leads.
+    Now works with REAL scraped data that includes emails and phones.
+    """
+    if not scraped_data:
         return pd.DataFrame()
         
-    results_json = json.dumps(raw_results[:20]) # Increased payload
+    # Prepare data for LLM - already has emails and phones from scraping
+    data_summary = []
+    for item in scraped_data[:20]:  # Limit to prevent token overflow
+        data_summary.append({
+            'url': item['url'],
+            'title': item['title'],
+            'emails': item['emails'],
+            'phones': item['phones'],
+            'description': item['snippet'][:200]  # Truncate
+        })
+    
+    results_json = json.dumps(data_summary, indent=2)
     
     prompt = f"""
-    I have a list of web search results. I need you to extract valid B2B leads and filter out irrelevant ones.
+    I have scraped real contact data from websites. Your job is to organize this into a structured lead list.
     
     User Context: {context}
     Special Notes: {notes}
     Industry: {industry}
     
-    Raw Search Data:
+    Scraped Data (with REAL emails and phone numbers):
     {results_json}
     
     Task:
-    1. Analyze each search result snippet/title/URL.
-    2. Extract structured data for each valid lead.
-    3. Return a JSON list of objects with EXACTLY these keys:
-       - "Organization": Name of the company/business
-       - "Contact Name": Full name of the person (if found, otherwise leave empty)
-       - "Job Title": Their role/position (if found, otherwise leave empty)
-       - "Email": Email address (if found, otherwise leave empty)
-       - "Why Good Fit": Brief explanation of why this is a qualified lead based on the user context
-       - "Category": Type of business (e.g., "Restaurant", "Hotel", "Distributor")
-       - "Website": The URL from the search result
+    1. For each entry, extract and organize the data.
+    2. Return a JSON list of objects with EXACTLY these keys:
+       - "Organization": Extract company/business name from title or URL
+       - "Contact Name": Leave empty (we don't have individual names yet)
+       - "Job Title": Leave empty
+       - "Email": Use the FIRST email from the scraped emails list (or empty if none)
+       - "Phone": Use the FIRST phone from the scraped phones list (or empty if none) 
+       - "Why Good Fit": Brief explanation based on context and industry match
+       - "Category": Type of business based on title/URL
+       - "Website": The URL
     
     IMPORTANT: 
-    - Be conservative - only include results that are clearly relevant businesses
-    - If a field is not available, use an empty string ""
+    - Use the ACTUAL scraped emails and phones - don't make them up!
+    - Only include businesses that match the industry/context
     - Strictly return ONLY valid JSON, no additional text
     """
     
@@ -241,7 +371,7 @@ def extract_and_filter(raw_results, context, notes, industry, provider):
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.5
+                temperature=0.3  # Lower temperature for more factual output
             )
             content = response.choices[0].message.content
         elif provider == "Google Gemini":
@@ -258,7 +388,7 @@ def extract_and_filter(raw_results, context, notes, industry, provider):
         st.error(f"Error extracting data: {e}")
         return pd.DataFrame()
 
-# --- Main App Execution ---
+# --- Main App Logic ---
 st.title("🚀 Real-Time B2B Lead Scraper & Analyzer")
 st.markdown(f"**Targeting:** `{target_persona}` in `{industry}` ({location})")
 
@@ -294,10 +424,15 @@ if search_btn or research_btn:
     with st.spinner("Scraping real-time data..."):
         raw_results = perform_search(queries)
         st.write(f"Found {len(raw_results)} raw results.")
+    
+    # NEW: Deep scraping phase
+    st.status("🕷️ Deep Scraping Websites...", expanded=True)
+    scraped_websites = scrape_websites(raw_results, max_urls=15)
+    st.write(f"Successfully scraped {len(scraped_websites)} websites with contact data.")
         
     st.status("🧠 Analyzing & Filtering Leads...", expanded=True)
     with st.spinner("LLM is processing results..."):
-        df = extract_and_filter(raw_results, user_context, additional_notes, industry, llm_provider)
+        df = extract_and_filter(scraped_websites, user_context, additional_notes, industry, llm_provider)
         
     if not df.empty:
         st.success(f"Successfully extracted {len(df)} qualified leads!")
